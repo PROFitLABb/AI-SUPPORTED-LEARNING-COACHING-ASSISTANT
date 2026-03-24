@@ -21,21 +21,22 @@ _PROMPTS = {
     "coaching_feedback": {
         "system": (
             "Sen yalnızca eğitim ve öğrenme konularında uzman bir AI öğrenme koçusun. "
-            "Görevin: kullanıcının öğrenme hedeflerini anlamak, kişiselleştirilmiş öğrenme planları önermek, "
-            "motivasyon sağlamak ve eğitim kaynaklarını tavsiye etmek. "
+            "Kullanıcının öğrenme geçmişini, stilini ve hedeflerini dikkate alarak kişiselleştirilmiş yanıtlar ver. "
+            "Önceki konuşmaları hatırla ve bağlam kur. "
             "SADECE eğitim, öğrenme, kariyer gelişimi ve beceri kazanımı konularında yardım et. "
             "Eğitimle ilgisi olmayan konularda kibarca konuyu öğrenmeye yönlendir. "
             "Kullanıcı 'teşekkürler', 'tamam', 'anladım', 'gerek yok' gibi kısa kapanış mesajları gönderirse "
             "kısa ve samimi bir şekilde karşılık ver, yeni konu açma. "
             "Yanıtların kısa ve net olsun. Türkçe yanıt ver. "
             "JSON formatında yanıt ver: "
-            '{\"content\": \"...\", \"suggested_resources\": [], \"next_step_hint\": \"\"}'
+            '{\"content\": \"...\", \"suggested_resources\": [], \"next_step_hint\": \"\", \"detected_topics\": []}'
         ),
         "user": (
             "Kullanıcı mesajı: {message}\n\n"
             "Mevcut öğrenme hedefleri: {current_goals}\n"
             "Tamamlanan konular: {completed_topics}\n"
-            "Son konuşmalar: {recent_interactions}"
+            "Öğrenme stili: {learning_style}\n"
+            "Son konuşmalar (hafıza):\n{recent_interactions}"
         ),
     }
 }
@@ -61,25 +62,33 @@ async def chat(
 ) -> ChatResponse:
     context = payload.context or UserContext(user_id=payload.user_id)
 
-    # Kullanıcının geçmiş mesajlarını bağlama ekle
+    # Kullanıcının geçmiş mesajlarını bağlama ekle (hafıza sistemi)
     history_result = await db.execute(
         select(MessageDB)
         .where(MessageDB.user_id == payload.user_id)
         .order_by(MessageDB.timestamp.desc())
-        .limit(10)
+        .limit(15)
     )
     history_rows = history_result.scalars().all()
     context.recent_interactions = [
         f"[{r.role}] {r.content[:200]}" for r in reversed(history_rows)
     ]
 
+    # Öğrenme stilini bağlama ekle
+    learning_style = context.learning_preferences.get("style", "mixed")
+
     try:
         llm_client = get_openai_client()
         cfg = get_llm_config()
-        # model adını client'a ekle (CoachingAgent okuyacak)
         llm_client._model = cfg.model  # type: ignore[attr-defined]
         agent = CoachingAgent(llm_client=llm_client, prompts=_PROMPTS)
+        # learning_style'ı user template'e geç
+        original_template = _PROMPTS["coaching_feedback"]["user"]
+        _PROMPTS["coaching_feedback"]["user"] = original_template.replace(
+            "{learning_style}", learning_style
+        )
         coach_response = await agent.respond(payload.message, context)
+        _PROMPTS["coaching_feedback"]["user"] = original_template
     except Exception as exc:
         # LLM hatası — kullanıcıya anlamlı mesaj dön
         coach_response = CoachResponse(

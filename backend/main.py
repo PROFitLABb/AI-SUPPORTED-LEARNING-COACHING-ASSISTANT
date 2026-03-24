@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routes import analytics_routes, coaching_routes, learning_routes, user_routes
+from backend.api.routes import analytics_routes, coaching_routes, learning_routes, user_routes, features_routes
 from backend.database.db import engine, Base
 import backend.models  # tüm modelleri Base'e kaydet
 
@@ -40,6 +40,7 @@ app.include_router(user_routes.router)
 app.include_router(learning_routes.router)
 app.include_router(coaching_routes.router)
 app.include_router(analytics_routes.router)
+app.include_router(features_routes.router)
 
 
 # ── Global exception handler ─────────────────────────────────────────────────

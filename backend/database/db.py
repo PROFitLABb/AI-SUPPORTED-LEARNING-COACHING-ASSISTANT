@@ -1,40 +1,32 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
-from typing import AsyncGenerator
+"""Sync SQLAlchemy — Vercel serverless uyumlu."""
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
+from typing import Generator
 from config.settings import settings
 
-# SQLite pool_size/max_overflow desteklemez, PostgreSQL destekler
-_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+# aiosqlite → sync sqlite veya postgresql
+_url = settings.DATABASE_URL.replace("sqlite+aiosqlite", "sqlite").replace("postgresql+asyncpg", "postgresql")
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
+engine = create_engine(
+    _url,
     echo=settings.DEBUG,
-    pool_pre_ping=not _is_sqlite,
-    **({} if _is_sqlite else {"pool_size": 10, "max_overflow": 20}),
+    connect_args={"check_same_thread": False} if "sqlite" in _url else {},
 )
 
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-    autocommit=False,
-)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 class Base(DeclarativeBase):
     pass
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that provides an async database session."""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
