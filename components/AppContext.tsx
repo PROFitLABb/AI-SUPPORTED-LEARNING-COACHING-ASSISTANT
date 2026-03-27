@@ -6,11 +6,14 @@ interface AppCtx {
   userId: string;
 }
 
-const Ctx = createContext<AppCtx>({ apiUrl: "/api", userId: "" });
+// Vercel'de Python handler /api/index adresinde çalışır
+const API_URL = "/api/index";
+
+const Ctx = createContext<AppCtx>({ apiUrl: API_URL, userId: "" });
 
 export function AppProvider({ children }: { children: ReactNode }) {
   return (
-    <Ctx.Provider value={{ apiUrl: "/api", userId: "" }}>
+    <Ctx.Provider value={{ apiUrl: API_URL, userId: "" }}>
       {children}
     </Ctx.Provider>
   );

@@ -47,7 +47,7 @@ export default function ChatPage() {
     {
       try {
         const history = messages.map(m => ({ role: m.role, content: m.content }));
-        const r = await fetch(`${apiUrl}/chat`, {
+        const r = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: text, history }),
