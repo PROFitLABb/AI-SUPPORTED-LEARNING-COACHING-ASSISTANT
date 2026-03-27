@@ -23,11 +23,13 @@ _SYSTEM = (
 )
 
 
+@app.get("/api/health")
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
 
+@app.post("/api/chat")
 @app.post("/chat")
 async def chat(request: Request):
     try:
